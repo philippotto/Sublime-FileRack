@@ -1,0 +1,3 @@
+[
+    { "keys": ["ctrl+shift+alt+d"], "command": "display_file_rack"}
+]
