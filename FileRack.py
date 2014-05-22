@@ -1,55 +1,81 @@
 import sublime, sublime_plugin
 import os
 import datetime
-
-class EventListener(sublime_plugin.EventListener):
-
-	def on_selection_modified(self, view):
-
-		pass
-
-	def on_modified(self, view):
-
-		if view.file_name():
-			# ignore "real" files
-			return
-
-		self.saveView(view)
-		self.scratchView(view)
+import unicodedata, string
 
 
-	def saveView(self, view):
+class FileInfo:
 
-		fileName = view.name()
+	def __init__(self, view):
+
+		self.view = view
+		self.isInRack = False
+		self.currentName = None
+
+
+	def getName(self):
+
+		fileName = self.view.name()
 
 		if not fileName:
-			currentDate = datetime.datetime.now().strftime("%I:%M-%d-%m-%y")
+			currentDate = datetime.datetime.now().strftime("%I-%M_%d-%m-%y")
 			fileName = "untitled - " + currentDate
 
 		fileName += ".txt"
 
+		fileName = Helper.sanitizeFileName(fileName)
+
+		return fileName
+
+
+	def renameTo(self, fileName):
+
+		oldFilePath = os.path.join(Helper.getRackPath(), self.currentName)
+		newFilePath = os.path.join(Helper.getRackPath(), fileName)
+
+		print("rename from", oldFilePath, "to", newFilePath)
+		os.rename(oldFilePath, newFilePath)
+
+		self.currentName = fileName
+
+
+	def save(self):
+
+		self.isInRack = True
+		fileName = self.getName()
+
+		if not self.currentName:
+			self.currentName = fileName
+
+		if self.currentName != fileName:
+			self.renameTo(fileName)
+
+
 		# TODO
-		# check if fileName already exists and whether it is a different one
-		# generate IDs and save to meta file
-		# handle possible renamings of current file
+		# - check if fileName already exists
+		# - ensure that fileName is valid
+		# - generate IDs and save to meta file
+		# - handle possible renamings of current file
 
 
-		contentRegion = sublime.Region(0, view.size())
-		bufferContent = view.substr(contentRegion)
+		contentRegion = sublime.Region(0, self.view.size())
+		bufferContent = self.view.substr(contentRegion)
 
 		filePath = os.path.join(Helper.getRackPath(), fileName)
 		if bufferContent:
 			with open(filePath, 'w') as f:
 				f.write(bufferContent)
-		else:
-			os.remove(filePath)
+		# else:
+		# 	# TODO: check removal and re-adding
+		# 	os.remove(filePath)
+		# 	self.isInRack = False
 
-		print(os.path.dirname(__file__))
+		self.scratchView()
 
 
-	def scratchView(self, view):
+	def scratchView(self):
 
-		view.set_scratch(True)
+		self.view.set_scratch(True)
 
 
 	def saveMetaData(self):
@@ -60,6 +86,17 @@ class EventListener(sublime_plugin.EventListener):
 		with open('index.json', 'w') as outfile:
 			json.dump(metadata, outfile, sort_keys = True, indent = 4, ensure_ascii = False)
 
+
+
+class EventListener(sublime_plugin.EventListener):
+
+	def on_modified(self, view):
+
+		fileInfo = Helper.getOrConstructFileInfoForView(view)
+
+		# put the buffer into the rack if it isn't a file
+		if fileInfo.isInRack or not view.file_name():
+			fileInfo.save()
 
 
 
@@ -82,6 +119,12 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 		return [file for file in os.listdir(Helper.getRackPath()) if file.endswith(".txt")]
 
 
+	def getPathForIndex(self, index):
+
+		fileName = self.items[index]
+		return os.path.join(Helper.getRackPath(), fileName)
+
+
 	def openFile(self, index):
 
 		# TODO opened files should behave as the usual "racked files"
@@ -90,47 +133,53 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 		# - renamed when they buffer name changes
 		# - deleted when they are empty
 
+		# TODO check whether the file is already open
 
-		fileName = self.items[index]
-		filePath = os.path.join(Helper.getRackPath(), fileName)
-
-		sublime.active_window().open_file(filePath)
+		sublime.active_window().open_file(self.getPathForIndex(index))
 
 
 	def openFileTransient(self, index):
 
-		sublime.active_window().open_file(filePath, sublime.TRANSIENT)
+		sublime.active_window().open_file(self.getPathForIndex(index), sublime.TRANSIENT)
 
 
 
 class Helper:
 
-	viewToHelperMap = {}
+	viewToFileInfoMapping = {}
 
 	def __init__(self):
 
 		pass
 
 	@staticmethod
-	def getRackPath:
+	def getRackPath():
 
 		return os.path.join(sublime.packages_path(), "FileRack", "files")
 
 
 	@staticmethod
-	def getOrConstructHelperForView(view):
+	def getOrConstructFileInfoForView(view):
 
-		mapping = Helper.viewToHelperMap
+		mapping = Helper.viewToFileInfoMapping
 		viewID = view.id()
 
 		if not viewID in mapping.keys():
-			mapping[viewID] = Helper()
+			mapping[viewID] = FileInfo(view)
 
-		helper = mapping[viewID]
-		return helper
+		fileInfo = mapping[viewID]
+		return fileInfo
 
 
 	@staticmethod
 	def hashSelection(selection):
 
 		return str([region for region in selection])
+
+
+	def sanitizeFileName(filename):
+
+		validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+		cleanedFilename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore')
+		return ''.join(chr(c) for c in cleanedFilename if chr(c) in validFilenameChars)
+
