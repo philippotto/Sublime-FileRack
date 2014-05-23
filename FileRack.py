@@ -15,7 +15,8 @@ class FileInfo:
 
 	def generateName(self):
 
-		fileName = self.view.name()
+		# take maximal 15 characters of the first line (stripped)
+		fileName = self.view.substr(sublime.Region(0, 15)).split("\n")[0].strip()
 
 		if fileName:
 			fileName = Helper.sanitizeFileName(fileName)
@@ -26,6 +27,7 @@ class FileInfo:
 
 		fileName = self.disambiguateFileName(fileName)
 		fileName += Helper.getFileType()
+
 		return fileName
 
 
@@ -81,10 +83,6 @@ class FileInfo:
 			self.renameTo(fileName)
 
 
-		# TODO
-		# - generate IDs and save to meta file
-
-
 		filePath = os.path.join(Helper.getRackPath(), fileName)
 
 		if bufferContent:
@@ -108,13 +106,10 @@ class FileInfo:
 		self.view.set_scratch(True)
 
 
-	def saveMetaData(self):
+	def convertToRackedView(self, fileName):
 
-		# TODO generate sensible metadata
-		# metadata = ...
-
-		with open('index.json', 'w') as outfile:
-			json.dump(metadata, outfile, sort_keys = True, indent = 4, ensure_ascii = False)
+		self.isInRack = True
+		self.currentName = fileName
 
 
 
@@ -135,7 +130,7 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 	def run(self, edit):
 
 		self.items = self.getFiles()
-
+		self.transientView = None
 		sublime.active_window().show_quick_panel(
 			self.items,
 			self.openFile,
@@ -158,25 +153,38 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 
 	def openFile(self, index):
 
-		# TODO opened files should behave as the usual "racked files"
-		# this means, that they should get
-		# - saved when modified
-		# - renamed when they buffer name changes
-		# - deleted when they are empty
-
 		# TODO check whether the file is already open
+
+		if self.transientView:
+			self.transientView.close()
 
 		if index == -1:
 			# quick panel was cancelled
-			self.transientView.close()
 			return
 
-		sublime.active_window().open_file(self.getPathForIndex(index))
+		rackedView = sublime.active_window().new_file()
+
+		arguments = dict(filePath = self.getPathForIndex(index), fileName = self.items[index])
+		rackedView.run_command("load_racked_file", arguments)
 
 
 	def openFileTransient(self, index):
 
 		self.transientView = sublime.active_window().open_file(self.getPathForIndex(index), sublime.TRANSIENT)
+
+
+
+class LoadRackedFile(sublime_plugin.TextCommand):
+
+	def run(self, edit, fileName, filePath):
+
+		with open(filePath, 'r') as f:
+			fileContent = f.read()
+
+		fileInfo = Helper.getOrConstructFileInfoForView(self.view)
+		fileInfo.convertToRackedView(fileName)
+
+		self.view.insert(edit, 0, fileContent)
 
 
 
@@ -220,6 +228,7 @@ class Helper:
 		return str([region for region in selection])
 
 
+	@staticmethod
 	def sanitizeFileName(filename):
 
 		validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
