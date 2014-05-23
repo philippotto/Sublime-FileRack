@@ -24,7 +24,24 @@ class FileInfo:
 			currentDate = datetime.datetime.now().strftime("%I-%M_%d-%m-%y")
 			fileName = "untitled - " + currentDate
 
-		fileName += ".txt"
+		fileName = self.disambiguateFileName(fileName)
+		fileName += Helper.getFileType()
+		return fileName
+
+
+	def disambiguateFileName(self, fileName):
+
+		originalFileName = fileName
+		fileNameWithType = lambda: fileName + Helper.getFileType()
+
+		isSameFile = lambda: self.currentName != fileNameWithType()
+		fileNameAlreadyExists = lambda: os.path.exists(os.path.join(Helper.getRackPath(), fileNameWithType()))
+
+		disambiguation = 0
+
+		while isSameFile() and fileNameAlreadyExists():
+			disambiguation += 1
+			fileName = originalFileName + str(disambiguation)
 
 		return fileName
 
@@ -65,7 +82,6 @@ class FileInfo:
 
 
 		# TODO
-		# - check if fileName already exists
 		# - generate IDs and save to meta file
 
 
@@ -177,6 +193,12 @@ class Helper:
 
 		# TODO: make the path configurable via settings
 		return os.path.join(sublime.packages_path(), "FileRack", "files")
+
+
+	@staticmethod
+	def getFileType():
+
+		return ".txt"
 
 
 	@staticmethod
