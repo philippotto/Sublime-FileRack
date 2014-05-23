@@ -13,17 +13,18 @@ class FileInfo:
 		self.currentName = None
 
 
-	def getName(self):
+	def generateName(self):
 
 		fileName = self.view.name()
+
+		if fileName:
+			fileName = Helper.sanitizeFileName(fileName)
 
 		if not fileName:
 			currentDate = datetime.datetime.now().strftime("%I-%M_%d-%m-%y")
 			fileName = "untitled - " + currentDate
 
 		fileName += ".txt"
-
-		fileName = Helper.sanitizeFileName(fileName)
 
 		return fileName
 
@@ -33,16 +34,28 @@ class FileInfo:
 		oldFilePath = os.path.join(Helper.getRackPath(), self.currentName)
 		newFilePath = os.path.join(Helper.getRackPath(), fileName)
 
-		print("rename from", oldFilePath, "to", newFilePath)
 		os.rename(oldFilePath, newFilePath)
-
 		self.currentName = fileName
 
 
-	def save(self):
+	def onModify(self):
+
+		contentRegion = sublime.Region(0, self.view.size())
+		bufferContent = self.view.substr(contentRegion)
+
+		if not bufferContent:
+			if self.isInRack:
+				filePath = os.path.join(Helper.getRackPath(), self.currentName)
+				self.delete(filePath)
+			return
+
+		self.save(bufferContent)
+
+
+	def save(self, bufferContent):
 
 		self.isInRack = True
-		fileName = self.getName()
+		fileName = self.generateName()
 
 		if not self.currentName:
 			self.currentName = fileName
@@ -53,24 +66,25 @@ class FileInfo:
 
 		# TODO
 		# - check if fileName already exists
-		# - ensure that fileName is valid
 		# - generate IDs and save to meta file
-		# - handle possible renamings of current file
 
-
-		contentRegion = sublime.Region(0, self.view.size())
-		bufferContent = self.view.substr(contentRegion)
 
 		filePath = os.path.join(Helper.getRackPath(), fileName)
+
 		if bufferContent:
 			with open(filePath, 'w') as f:
 				f.write(bufferContent)
-		# else:
-		# 	# TODO: check removal and re-adding
-		# 	os.remove(filePath)
-		# 	self.isInRack = False
+		else:
+			self.delete(filePath)
 
 		self.scratchView()
+
+
+	def delete(self, filePath):
+
+		os.remove(filePath)
+		self.isInRack = False
+		self.currentName = None
 
 
 	def scratchView(self):
@@ -96,7 +110,7 @@ class EventListener(sublime_plugin.EventListener):
 
 		# put the buffer into the rack if it isn't a file
 		if fileInfo.isInRack or not view.file_name():
-			fileInfo.save()
+			fileInfo.onModify()
 
 
 
@@ -113,6 +127,7 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 			0,
 			self.openFileTransient
 		)
+
 
 	def getFiles(self):
 
@@ -135,12 +150,17 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 
 		# TODO check whether the file is already open
 
+		if index == -1:
+			# quick panel was cancelled
+			self.transientView.close()
+			return
+
 		sublime.active_window().open_file(self.getPathForIndex(index))
 
 
 	def openFileTransient(self, index):
 
-		sublime.active_window().open_file(self.getPathForIndex(index), sublime.TRANSIENT)
+		self.transientView = sublime.active_window().open_file(self.getPathForIndex(index), sublime.TRANSIENT)
 
 
 
@@ -155,6 +175,7 @@ class Helper:
 	@staticmethod
 	def getRackPath():
 
+		# TODO: make the path configurable via settings
 		return os.path.join(sublime.packages_path(), "FileRack", "files")
 
 
