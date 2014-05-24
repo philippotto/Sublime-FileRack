@@ -117,6 +117,10 @@ class EventListener(sublime_plugin.EventListener):
 
 	def on_modified(self, view):
 
+		if not view.name():
+			# ignore input-views (like search boxes)
+			return
+
 		fileInfo = Helper.getOrConstructFileInfoForView(view)
 
 		# put the buffer into the rack if it isn't a file
@@ -153,8 +157,6 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 
 	def openFile(self, index):
 
-		# TODO check whether the file is already open
-
 		if self.transientView:
 			self.transientView.close()
 
@@ -162,10 +164,33 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 			# quick panel was cancelled
 			return
 
+
+		fileName = self.items[index]
+
+		(window, existingView) = self.getViewFor(fileName)
+
+		if existingView:
+			# TODO: work around the fact that the window won't be focused
+			window.focus_view(existingView)
+			return
+
+
 		rackedView = sublime.active_window().new_file()
 
-		arguments = dict(filePath = self.getPathForIndex(index), fileName = self.items[index])
+		arguments = dict(filePath = self.getPathForIndex(index), fileName = fileName)
 		rackedView.run_command("load_racked_file", arguments)
+
+
+	def getViewFor(self, fileName):
+
+		for window in sublime.windows():
+			for view in window.views():
+				fileInfo = Helper.getOrConstructFileInfoForView(view)
+
+				if fileInfo.currentName == fileName:
+					return (window, view)
+
+		return (None, None)
 
 
 	def openFileTransient(self, index):
@@ -234,4 +259,12 @@ class Helper:
 		validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
 		cleanedFilename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore')
 		return ''.join(chr(c) for c in cleanedFilename if chr(c) in validFilenameChars)
+
+
+
+# TODO:
+# - ensure that racked files behave normally when sublime restores an old session
+# 	- one possibility: (de)serialize viewToFileInfoMapping (use buffer ids instead of view references?)
+# - create tests
+# - ...
 
