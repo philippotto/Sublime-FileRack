@@ -2,14 +2,14 @@ import sublime, sublime_plugin
 import os
 import datetime
 import unicodedata, string
-
+import json
 
 class FileInfo:
 
 	def __init__(self, view):
 
 		self.view = view
-
+		self.lastChangeCount = view.change_count()
 
 	@property
 	def isInRack(self): return self.view.settings().get("isInRack", False)
@@ -24,7 +24,10 @@ class FileInfo:
 
 
 	@currentName.setter
-	def currentName(self, value): return self.view.settings().set("currentRackedFileName", value)
+	def currentName(self, value):
+
+		self.view.set_name(value or "")
+		return self.view.settings().set("currentRackedFileName", value)
 
 
 	def generateName(self):
@@ -71,13 +74,27 @@ class FileInfo:
 		self.currentName = fileName
 
 
+	def updateChangeCount(self):
+
+		newChangeCount = self.view.change_count()
+		if self.lastChangeCount < newChangeCount:
+			self.lastChangeCount = newChangeCount
+			return True
+		else:
+			return False
+
+
 	def onModify(self):
+
+		if not self.updateChangeCount():
+			# for some reason, the event is triggered multiple times
+			return
 
 		contentRegion = sublime.Region(0, self.view.size())
 		bufferContent = self.view.substr(contentRegion)
 
 		if not bufferContent:
-			if self.isInRack:
+			if self.isInRack and self.currentName:
 				filePath = os.path.join(Helper.getRackPath(), self.currentName)
 				self.delete(filePath)
 			return
@@ -142,6 +159,12 @@ class EventListener(sublime_plugin.EventListener):
 			fileInfo.onModify()
 
 
+	def on_post_text_command(self, view, command_name, args):
+
+		if command_name == "set_file_type":
+			Helper.saveSyntax(view)
+
+
 
 class DisplayFileRack(sublime_plugin.TextCommand):
 
@@ -163,10 +186,15 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 		return [file for file in os.listdir(Helper.getRackPath()) if file.endswith(".txt")]
 
 
-	def getPathForIndex(self, index):
+	def getFilePathByIndex(self, index):
 
 		fileName = self.items[index]
 		return os.path.join(Helper.getRackPath(), fileName)
+
+
+	def getFileNameByIndex(self, index):
+
+		return self.items[index]
 
 
 	def openFile(self, index):
@@ -179,7 +207,7 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 			return
 
 
-		fileName = self.items[index]
+		fileName = self.getFileNameByIndex(index)
 
 		(window, existingView) = self.getViewFor(fileName)
 
@@ -191,7 +219,7 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 
 		rackedView = sublime.active_window().new_file()
 
-		arguments = dict(filePath = self.getPathForIndex(index), fileName = fileName)
+		arguments = dict(filePath = self.getFilePathByIndex(index), fileName = fileName)
 		rackedView.run_command("load_racked_file", arguments)
 
 
@@ -209,7 +237,8 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 
 	def openFileTransient(self, index):
 
-		self.transientView = sublime.active_window().open_file(self.getPathForIndex(index), sublime.TRANSIENT)
+		self.transientView = sublime.active_window().open_file(self.getFilePathByIndex(index), sublime.TRANSIENT)
+		Helper.setSyntax(self.transientView, self.getFileNameByIndex(index))
 
 
 
@@ -224,6 +253,9 @@ class LoadRackedFile(sublime_plugin.TextCommand):
 		fileInfo.convertToRackedView(fileName)
 
 		self.view.insert(edit, 0, fileContent)
+		self.view.set_name(fileName)
+
+		Helper.setSyntax(self.view, fileName)
 
 
 
@@ -240,6 +272,12 @@ class Helper:
 
 		# TODO: make the path configurable via settings
 		return os.path.join(sublime.packages_path(), "FileRack", "files")
+
+
+	@staticmethod
+	def getMetaDataPath():
+
+		return os.path.join(Helper.getRackPath(), 'index.json')
 
 
 	@staticmethod
@@ -262,9 +300,46 @@ class Helper:
 
 
 	@staticmethod
-	def hashSelection(selection):
+	def getMetaData():
 
-		return str([region for region in selection])
+		if not os.path.exists(Helper.getMetaDataPath()):
+			return {}
+
+		with open(Helper.getMetaDataPath(), 'r') as file:
+			metadata = json.load(file)
+
+		return metadata
+
+
+	@staticmethod
+	def saveSyntax(view):
+
+		metadata = Helper.getMetaData()
+
+		fileInfo = Helper.getOrConstructFileInfoForView(view)
+		metadata[fileInfo.currentName] = fileInfo.view.settings().get('syntax')
+
+		with open(Helper.getMetaDataPath(), 'w') as file:
+			json.dump(metadata, file, sort_keys = True, indent = 4, ensure_ascii = False)
+
+
+	@staticmethod
+	def getSyntax(fileName):
+
+		metadata = Helper.getMetaData()
+
+		if fileName in metadata:
+			return metadata[fileName]
+		else:
+			return None
+
+
+	@staticmethod
+	def setSyntax(view, fileName):
+
+		syntax = Helper.getSyntax(fileName)
+		if syntax:
+			view.set_syntax_file(syntax)
 
 
 	@staticmethod
