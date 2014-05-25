@@ -9,8 +9,22 @@ class FileInfo:
 	def __init__(self, view):
 
 		self.view = view
-		self.isInRack = False
-		self.currentName = None
+
+
+	@property
+	def isInRack(self): return self.view.settings().get("isInRack", False)
+
+
+	@isInRack.setter
+	def isInRack(self, value): return self.view.settings().set("isInRack", value)
+
+
+	@property
+	def currentName(self): return self.view.settings().get("currentRackedFileName", None)
+
+
+	@currentName.setter
+	def currentName(self, value): return self.view.settings().set("currentRackedFileName", value)
 
 
 	def generateName(self):
@@ -36,12 +50,12 @@ class FileInfo:
 		originalFileName = fileName
 		fileNameWithType = lambda: fileName + Helper.getFileType()
 
-		isSameFile = lambda: self.currentName != fileNameWithType()
+		isOtherFile = lambda: self.currentName != fileNameWithType()
 		fileNameAlreadyExists = lambda: os.path.exists(os.path.join(Helper.getRackPath(), fileNameWithType()))
 
 		disambiguation = 0
 
-		while isSameFile() and fileNameAlreadyExists():
+		while isOtherFile() and fileNameAlreadyExists():
 			disambiguation += 1
 			fileName = originalFileName + str(disambiguation)
 
@@ -263,8 +277,6 @@ class Helper:
 
 
 # TODO:
-# - ensure that racked files behave normally when sublime restores an old session
-# 	- one possibility: (de)serialize viewToFileInfoMapping (use buffer ids instead of view references?)
 # - create tests
 # - ...
 
