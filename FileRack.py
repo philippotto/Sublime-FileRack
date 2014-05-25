@@ -9,7 +9,7 @@ class FileInfo:
 	def __init__(self, view):
 
 		self.view = view
-		self.lastChangeCount = view.change_count()
+		self.lastChangeCount = view.change_count() - 1
 
 	@property
 	def isInRack(self): return self.view.settings().get("isInRack", False)
@@ -32,8 +32,8 @@ class FileInfo:
 
 	def generateName(self):
 
-		# take maximal 15 characters of the first line (stripped)
-		fileName = self.view.substr(sublime.Region(0, 15)).split("\n")[0].strip()
+		# take first line (stripped) as fileName
+		fileName = self.view.substr(self.view.line(0)).strip()
 
 		if fileName:
 			fileName = Helper.sanitizeFileName(fileName)
