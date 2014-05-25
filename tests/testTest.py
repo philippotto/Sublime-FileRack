@@ -105,7 +105,7 @@ class TestHelloWorld(TestCase):
 
 		self.assertEqual(len(files), 2)
 		self.assertNotEqual(files[0], files[1])
-		self.assertEqual(files[1], testString + "1.txt")
+		self.assertIn(testString + "1.txt", files)
 
 
 	def test_empty_name(self):
