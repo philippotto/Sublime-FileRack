@@ -262,6 +262,7 @@ class LoadRackedFile(sublime_plugin.TextCommand):
 class Helper:
 
 	viewToFileInfoMapping = {}
+	isTestEnvironment = False
 
 	def __init__(self):
 
@@ -270,8 +271,11 @@ class Helper:
 	@staticmethod
 	def getRackPath():
 
-		# TODO: make the path configurable via settings
-		return os.path.join(sublime.packages_path(), "FileRack", "files")
+		if Helper.isTestEnvironment:
+			return os.path.join(sublime.packages_path(), "FileRack", "tmp_test_files")
+		else:
+			# TODO: make the path configurable via settings
+			return os.path.join(sublime.packages_path(), "FileRack", "files")
 
 
 	@staticmethod
@@ -351,7 +355,37 @@ class Helper:
 
 
 
-# TODO:
-# - create tests
-# - ...
+class TestFileRack(sublime_plugin.TextCommand):
+
+		def run(self, edit, commandName, argTuple):
+
+			getattr(self, commandName)(self.view, edit, argTuple)
+
+
+		def insertSomeText(self, view, edit, argTuple):
+
+			self.view.insert(edit, 0, argTuple[0])
+			self.onModify(view, edit, ())
+
+
+		def deleteText(self, view, edit, argTuple):
+
+			self.view.run_command('select_all')
+			self.view.run_command('left_delete')
+
+
+		def onModify(self, view, edit, argTuple):
+
+			fileInfo = Helper.getOrConstructFileInfoForView(view)
+			fileInfo.onModify()
+
+
+		def enableTestEnvironment(self, view, edit, argTuple):
+
+			Helper.isTestEnvironment = True
+
+
+		def disableTestEnvironment(self, view, edit, argTuple):
+
+			Helper.isTestEnvironment = False
 
