@@ -32,8 +32,8 @@ class FileInfo:
 
 	def generateName(self):
 
-		# take first line (stripped) as fileName
-		fileName = self.view.substr(self.view.line(0)).strip()
+		# strip the first line and take 50 characters (maximum) as fileName
+		fileName = self.view.substr(self.view.line(0)).strip()[:50]
 
 		if fileName:
 			fileName = Helper.sanitizeFileName(fileName)
