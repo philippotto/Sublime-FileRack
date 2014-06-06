@@ -268,14 +268,30 @@ class Helper:
 
 		pass
 
+
 	@staticmethod
 	def getRackPath():
 
 		if Helper.isTestEnvironment:
 			return os.path.join(sublime.packages_path(), "FileRack", "tmp_test_files")
 		else:
-			# TODO: make the path configurable via settings
-			return os.path.join(sublime.packages_path(), "FileRack", "files")
+			settings = sublime.load_settings("FileRack.sublime-settings")
+
+			path = settings.get("rack_path")
+
+			if path and not os.path.exists(path):
+				message = "The rack_path you supplied in FileRack.sublime-settings doesn't exist. I will use the standard path."
+				# TODO
+				# message_dialog is probably very annoying; print on the other hand is unlikely to be seen
+				# sublime.message_dialog(message)
+				print(message)
+				path = None
+
+			if not path:
+				# TODO: does this path work when FileRack is bundled by package_control
+				path = os.path.join(sublime.packages_path(), "FileRack", "files")
+
+			return path
 
 
 	@staticmethod
@@ -309,6 +325,7 @@ class Helper:
 		if not os.path.exists(Helper.getMetaDataPath()):
 			return {}
 
+		# TODO: can it happen that we produce invalid json?
 		with open(Helper.getMetaDataPath(), 'r') as file:
 			metadata = json.load(file)
 
