@@ -325,9 +325,13 @@ class Helper:
 		if not os.path.exists(Helper.getMetaDataPath()):
 			return {}
 
-		# TODO: can it happen that we produce invalid json?
-		with open(Helper.getMetaDataPath(), 'r') as file:
-			metadata = json.load(file)
+		# TODO: why is the json invalid sometimes?
+		try:
+			with open(Helper.getMetaDataPath(), 'r') as file:
+				metadata = json.load(file)
+		except Exception, e:
+			print("metadata could not be read properly.")
+			metadata = {}
 
 		return metadata
 
