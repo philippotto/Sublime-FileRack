@@ -329,7 +329,7 @@ class Helper:
 		try:
 			with open(Helper.getMetaDataPath(), 'r') as file:
 				metadata = json.load(file)
-		except Exception, e:
+		except e:
 			print("metadata could not be read properly.")
 			metadata = {}
 
