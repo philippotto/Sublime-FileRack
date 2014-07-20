@@ -86,23 +86,19 @@ class FileInfo:
 
 	def onModify(self):
 
+		if not self.isInRack:
+			return
+
 		if not self.updateChangeCount():
 			# for some reason, the event is triggered multiple times
 			return
 
-		contentRegion = sublime.Region(0, self.view.size())
-		bufferContent = self.view.substr(contentRegion)
-
-		if not bufferContent:
-			if self.isInRack and self.currentName:
-				filePath = os.path.join(Helper.getRackPath(), self.currentName)
-				self.delete(filePath)
-			return
-
-		self.save(bufferContent)
+		deleted = self.deleteIfEmpty()
+		if not deleted:
+			self.save()
 
 
-	def save(self, bufferContent):
+	def save(self):
 
 		self.isInRack = True
 		fileName = self.generateName()
@@ -115,6 +111,7 @@ class FileInfo:
 
 
 		filePath = os.path.join(Helper.getRackPath(), fileName)
+		bufferContent = self.getBufferContent()
 
 		if bufferContent:
 			with open(filePath, 'w') as f:
@@ -123,6 +120,22 @@ class FileInfo:
 			self.delete(filePath)
 
 		self.scratchView()
+
+
+	def getBufferContent(self):
+
+		contentRegion = sublime.Region(0, self.view.size())
+		return self.view.substr(contentRegion)
+
+
+	def deleteIfEmpty(self):
+
+		if not self.getBufferContent() and self.currentName:
+			filePath = os.path.join(Helper.getRackPath(), self.currentName)
+			self.delete(filePath)
+			return True
+
+		return False
 
 
 	def delete(self, filePath):
@@ -148,15 +161,20 @@ class EventListener(sublime_plugin.EventListener):
 
 	def on_modified(self, view):
 
-		if not view.name():
-			# ignore input-views (like search boxes)
-			return
-
 		fileInfo = Helper.getOrConstructFileInfoForView(view)
 
-		# put the buffer into the rack if it isn't a file
-		if fileInfo.isInRack or not view.file_name():
-			fileInfo.onModify()
+		if not fileInfo.isInRack and view.is_scratch():
+			# ignore input-views (e.g. search boxes)
+			return
+
+		settings = sublime.load_settings("FileRack.sublime-settings")
+		explicitSave = settings.get("explicit_save_to_file_rack")
+
+		# put to rack, if view has no file name and should be automatically saved
+		if not view.file_name() and not explicitSave:
+			fileInfo.isInRack = True
+
+		fileInfo.onModify()
 
 
 	def on_post_text_command(self, view, command_name, args):
@@ -329,7 +347,7 @@ class Helper:
 		try:
 			with open(Helper.getMetaDataPath(), 'r') as file:
 				metadata = json.load(file)
-		except e:
+		except:
 			print("metadata could not be read properly.")
 			metadata = {}
 
