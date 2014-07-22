@@ -1,0 +1,4 @@
+[
+    { "keys": ["super+shift+alt+d"], "command": "display_file_rack"},
+    { "keys": ["super+shift+s"], "command": "save_to_file_rack"}
+]

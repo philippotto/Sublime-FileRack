@@ -212,6 +212,16 @@ class EventListener(sublime_plugin.EventListener):
 
 
 
+class SaveToFileRack(sublime_plugin.TextCommand):
+
+	def run(self, edit):
+
+		fileInfo = Helper.getOrConstructFileInfoForView(self.view)
+		fileInfo.save()
+		sublime.status_message("The active view is in FileRack, now.")
+
+
+
 class DisplayFileRack(sublime_plugin.TextCommand):
 
 	def run(self, edit):
