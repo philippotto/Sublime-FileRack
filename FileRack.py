@@ -84,14 +84,16 @@ class FileInfo:
 			return False
 
 
-	def onModify(self):
+	def onModify(self, force=False):
 
-		if not self.isInRack:
-			return
+		if not force:
 
-		if not self.updateChangeCount():
-			# for some reason, the event is triggered multiple times
-			return
+			if not self.isInRack:
+				return
+
+			if not self.updateChangeCount():
+				# for some reason, the event is triggered multiple times
+				return
 
 		deleted = self.deleteIfEmpty()
 		if not deleted:
@@ -116,6 +118,7 @@ class FileInfo:
 		if bufferContent:
 			with open(filePath, 'w') as f:
 				f.write(bufferContent)
+
 		else:
 			self.delete(filePath)
 
@@ -131,18 +134,23 @@ class FileInfo:
 	def deleteIfEmpty(self):
 
 		if not self.getBufferContent() and self.currentName:
-			filePath = os.path.join(Helper.getRackPath(), self.currentName)
-			self.delete(filePath)
+			self.delete()
 			return True
 
 		return False
 
 
-	def delete(self, filePath):
+	def delete(self):
 
-		os.remove(filePath)
+		filePath = os.path.join(Helper.getRackPath(), self.currentName)
+		try:
+			os.remove(filePath)
+		except:
+			print("FileRack: Couldn't delete file")
+
 		self.isInRack = False
 		self.currentName = None
+		self.view.set_scratch(False)
 
 
 	def scratchView(self):
@@ -162,19 +170,39 @@ class EventListener(sublime_plugin.EventListener):
 	def on_modified(self, view):
 
 		fileInfo = Helper.getOrConstructFileInfoForView(view)
+		fileInfo.isInRack = self.shouldBeInRack(fileInfo)
+		fileInfo.onModify()
 
-		if not fileInfo.isInRack and view.is_scratch():
-			# ignore input-views (e.g. search boxes)
-			return
+
+	def shouldBeInRack(self, fileInfo):
+
+		if fileInfo.isInRack:
+			return True
+
+		view = fileInfo.view
+
+		activeGroup = sublime.active_window().active_group()
+		activeWindow = sublime.active_window()
+		activeViewInActiveGroup = activeWindow.active_view_in_group(activeGroup)
+
+		if view != activeViewInActiveGroup:
+			# the given view is not the active view in the active group of the active window
+			# so it is not a "real" view -> ignore it
+			return False
+
+		if view.is_scratch():
+			# scratch views aren't meant to be saved (e.g. search results)
+			return False
+
+		if view.file_name():
+			# the view shows a file which is already on disk
+			return False
+
 
 		settings = sublime.load_settings("FileRack.sublime-settings")
 		explicitSave = settings.get("explicit_save_to_file_rack")
 
-		# put to rack, if view has no file name and should be automatically saved
-		if not view.file_name() and not explicitSave:
-			fileInfo.isInRack = True
-
-		fileInfo.onModify()
+		return not explicitSave
 
 
 	def on_post_text_command(self, view, command_name, args):
@@ -228,14 +256,23 @@ class DisplayFileRack(sublime_plugin.TextCommand):
 		fileName = self.getFileNameByIndex(index)
 
 		(window, existingView) = self.getViewFor(fileName)
+		activeWindow = sublime.active_window()
 
 		if existingView:
-			# TODO: work around the fact that the window won't be focused
-			window.focus_view(existingView)
-			return
+			if activeWindow == existingView.window():
+				window.focus_view(existingView)
+				return
+			else:
+				# since we cannot focus another sublime window, close
+				# the file and reopen it in the active window.
+				# a better approach would be to move the view to the active window, but
+				# unfortunately this isn't possible with the ST API.
+
+				existingView.window().focus_view(existingView)
+				existingView.window().run_command("close_file")
 
 
-		rackedView = sublime.active_window().new_file()
+		rackedView = activeWindow.new_file()
 
 		arguments = dict(filePath = self.getFilePathByIndex(index), fileName = fileName)
 		rackedView.run_command("load_racked_file", arguments)
@@ -416,7 +453,7 @@ class TestFileRack(sublime_plugin.TextCommand):
 		def onModify(self, view, edit, argTuple):
 
 			fileInfo = Helper.getOrConstructFileInfoForView(view)
-			fileInfo.onModify()
+			fileInfo.onModify(True)
 
 
 		def enableTestEnvironment(self, view, edit, argTuple):
