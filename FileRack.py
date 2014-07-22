@@ -111,16 +111,15 @@ class FileInfo:
 		if self.currentName != fileName:
 			self.renameTo(fileName)
 
-
-		filePath = os.path.join(Helper.getRackPath(), fileName)
 		bufferContent = self.getBufferContent()
-
 		if bufferContent:
+			filePath = os.path.join(Helper.getRackPath(), fileName)
+
 			with open(filePath, 'w') as f:
 				f.write(bufferContent)
 
 		else:
-			self.delete(filePath)
+			self.delete()
 
 		self.scratchView()
 
@@ -146,7 +145,7 @@ class FileInfo:
 		try:
 			os.remove(filePath)
 		except:
-			print("FileRack: Couldn't delete file")
+			print("FileRack couldn't delete file", filePath)
 
 		self.isInRack = False
 		self.currentName = None
@@ -160,8 +159,8 @@ class FileInfo:
 
 	def convertToRackedView(self, fileName):
 
-		self.isInRack = True
 		self.currentName = fileName
+		self.isInRack = True
 
 
 
