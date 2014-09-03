@@ -6,471 +6,471 @@ import json
 
 class FileInfo:
 
-	def __init__(self, view):
+  def __init__(self, view):
 
-		self.view = view
-		self.lastChangeCount = view.change_count() - 1
+    self.view = view
+    self.lastChangeCount = view.change_count() - 1
 
-	@property
-	def isInRack(self): return self.view.settings().get("isInRack", False)
-
-
-	@isInRack.setter
-	def isInRack(self, value): return self.view.settings().set("isInRack", value)
+  @property
+  def isInRack(self): return self.view.settings().get("isInRack", False)
 
 
-	@property
-	def currentName(self): return self.view.settings().get("currentRackedFileName", None)
+  @isInRack.setter
+  def isInRack(self, value): return self.view.settings().set("isInRack", value)
 
 
-	@currentName.setter
-	def currentName(self, value):
-
-		self.view.set_name(value or "")
-		return self.view.settings().set("currentRackedFileName", value)
+  @property
+  def currentName(self): return self.view.settings().get("currentRackedFileName", None)
 
 
-	def generateName(self):
+  @currentName.setter
+  def currentName(self, value):
 
-		# strip the first line and take 50 characters (maximum) as fileName
-		fileName = self.view.substr(self.view.line(0)).strip()[:50]
-
-		if fileName:
-			fileName = Helper.sanitizeFileName(fileName)
-
-		if not fileName:
-			currentDate = datetime.datetime.now().strftime("%I-%M_%d-%m-%y")
-			fileName = "untitled - " + currentDate
-
-		fileName = self.disambiguateFileName(fileName)
-		fileName += Helper.getFileType()
-
-		return fileName
+    self.view.set_name(value or "")
+    return self.view.settings().set("currentRackedFileName", value)
 
 
-	def disambiguateFileName(self, fileName):
+  def generateName(self):
 
-		originalFileName = fileName
-		fileNameWithType = lambda: fileName + Helper.getFileType()
+    # strip the first line and take 50 characters (maximum) as fileName
+    fileName = self.view.substr(self.view.line(0)).strip()[:50]
 
-		isOtherFile = lambda: self.currentName != fileNameWithType()
-		fileNameAlreadyExists = lambda: os.path.exists(os.path.join(Helper.getRackPath(), fileNameWithType()))
+    if fileName:
+      fileName = Helper.sanitizeFileName(fileName)
 
-		disambiguation = 0
+    if not fileName:
+      currentDate = datetime.datetime.now().strftime("%I-%M_%d-%m-%y")
+      fileName = "untitled - " + currentDate
 
-		while isOtherFile() and fileNameAlreadyExists():
-			disambiguation += 1
-			fileName = originalFileName + str(disambiguation)
+    fileName = self.disambiguateFileName(fileName)
+    fileName += Helper.getFileType()
 
-		return fileName
-
-
-	def renameTo(self, fileName):
-
-		oldFilePath = os.path.join(Helper.getRackPath(), self.currentName)
-		newFilePath = os.path.join(Helper.getRackPath(), fileName)
-
-		os.rename(oldFilePath, newFilePath)
-		self.currentName = fileName
+    return fileName
 
 
-	def updateChangeCount(self):
+  def disambiguateFileName(self, fileName):
 
-		newChangeCount = self.view.change_count()
-		if self.lastChangeCount < newChangeCount:
-			self.lastChangeCount = newChangeCount
-			return True
-		else:
-			return False
+    originalFileName = fileName
+    fileNameWithType = lambda: fileName + Helper.getFileType()
 
+    isOtherFile = lambda: self.currentName != fileNameWithType()
+    fileNameAlreadyExists = lambda: os.path.exists(os.path.join(Helper.getRackPath(), fileNameWithType()))
 
-	def onModify(self, force=False):
+    disambiguation = 0
 
-		if not force:
+    while isOtherFile() and fileNameAlreadyExists():
+      disambiguation += 1
+      fileName = originalFileName + str(disambiguation)
 
-			if not self.isInRack:
-				return
-
-			if not self.updateChangeCount():
-				# for some reason, the event is triggered multiple times
-				return
-
-		deleted = self.deleteIfEmpty()
-		if not deleted:
-			self.save()
+    return fileName
 
 
-	def save(self):
+  def renameTo(self, fileName):
 
-		self.isInRack = True
-		fileName = self.generateName()
+    oldFilePath = os.path.join(Helper.getRackPath(), self.currentName)
+    newFilePath = os.path.join(Helper.getRackPath(), fileName)
 
-		if not self.currentName:
-			self.currentName = fileName
-
-		if self.currentName != fileName:
-			self.renameTo(fileName)
-
-		bufferContent = self.getBufferContent()
-		if bufferContent:
-			filePath = os.path.join(Helper.getRackPath(), fileName)
-
-			with open(filePath, 'w') as f:
-				f.write(bufferContent)
-
-		else:
-			self.delete()
-
-		self.scratchView()
+    os.rename(oldFilePath, newFilePath)
+    self.currentName = fileName
 
 
-	def getBufferContent(self):
+  def updateChangeCount(self):
 
-		contentRegion = sublime.Region(0, self.view.size())
-		return self.view.substr(contentRegion)
-
-
-	def deleteIfEmpty(self):
-
-		if not self.getBufferContent() and self.currentName:
-			self.delete()
-			return True
-
-		return False
+    newChangeCount = self.view.change_count()
+    if self.lastChangeCount < newChangeCount:
+      self.lastChangeCount = newChangeCount
+      return True
+    else:
+      return False
 
 
-	def delete(self):
+  def onModify(self, force=False):
 
-		filePath = os.path.join(Helper.getRackPath(), self.currentName)
-		try:
-			os.remove(filePath)
-		except:
-			print("FileRack couldn't delete file", filePath)
+    if not force:
 
-		self.isInRack = False
-		self.currentName = None
-		self.view.set_scratch(False)
+      if not self.isInRack:
+        return
 
+      if not self.updateChangeCount():
+        # for some reason, the event is triggered multiple times
+        return
 
-	def scratchView(self):
-
-		self.view.set_scratch(True)
+    deleted = self.deleteIfEmpty()
+    if not deleted:
+      self.save()
 
 
-	def convertToRackedView(self, fileName):
+  def save(self):
 
-		self.currentName = fileName
-		self.isInRack = True
+    self.isInRack = True
+    fileName = self.generateName()
+
+    if not self.currentName:
+      self.currentName = fileName
+
+    if self.currentName != fileName:
+      self.renameTo(fileName)
+
+    bufferContent = self.getBufferContent()
+    if bufferContent:
+      filePath = os.path.join(Helper.getRackPath(), fileName)
+
+      with open(filePath, 'w') as f:
+        f.write(bufferContent)
+
+    else:
+      self.delete()
+
+    self.scratchView()
+
+
+  def getBufferContent(self):
+
+    contentRegion = sublime.Region(0, self.view.size())
+    return self.view.substr(contentRegion)
+
+
+  def deleteIfEmpty(self):
+
+    if not self.getBufferContent() and self.currentName:
+      self.delete()
+      return True
+
+    return False
+
+
+  def delete(self):
+
+    filePath = os.path.join(Helper.getRackPath(), self.currentName)
+    try:
+      os.remove(filePath)
+    except:
+      print("FileRack couldn't delete file", filePath)
+
+    self.isInRack = False
+    self.currentName = None
+    self.view.set_scratch(False)
+
+
+  def scratchView(self):
+
+    self.view.set_scratch(True)
+
+
+  def convertToRackedView(self, fileName):
+
+    self.currentName = fileName
+    self.isInRack = True
 
 
 
 class EventListener(sublime_plugin.EventListener):
 
-	def on_modified(self, view):
+  def on_modified(self, view):
 
-		fileInfo = Helper.getOrConstructFileInfoForView(view)
-		fileInfo.isInRack = self.shouldBeInRack(fileInfo)
-		fileInfo.onModify()
-
-
-	def shouldBeInRack(self, fileInfo):
-
-		if fileInfo.isInRack:
-			return True
-
-		view = fileInfo.view
-
-		activeGroup = sublime.active_window().active_group()
-		activeWindow = sublime.active_window()
-		activeViewInActiveGroup = activeWindow.active_view_in_group(activeGroup)
-
-		if view != activeViewInActiveGroup:
-			# the given view is not the active view in the active group of the active window
-			# so it is not a "real" view -> ignore it
-			return False
-
-		if view.is_scratch():
-			# scratch views aren't meant to be saved (e.g. search results)
-			return False
-
-		if view.file_name():
-			# the view shows a file which is already on disk
-			return False
+    fileInfo = Helper.getOrConstructFileInfoForView(view)
+    fileInfo.isInRack = self.shouldBeInRack(fileInfo)
+    fileInfo.onModify()
 
 
-		settings = sublime.load_settings("FileRack.sublime-settings")
-		explicitSave = settings.get("explicit_save_to_file_rack")
+  def shouldBeInRack(self, fileInfo):
 
-		return not explicitSave
+    if fileInfo.isInRack:
+      return True
+
+    view = fileInfo.view
+
+    activeGroup = sublime.active_window().active_group()
+    activeWindow = sublime.active_window()
+    activeViewInActiveGroup = activeWindow.active_view_in_group(activeGroup)
+
+    if view != activeViewInActiveGroup:
+      # the given view is not the active view in the active group of the active window
+      # so it is not a "real" view -> ignore it
+      return False
+
+    if view.is_scratch():
+      # scratch views aren't meant to be saved (e.g. search results)
+      return False
+
+    if view.file_name():
+      # the view shows a file which is already on disk
+      return False
 
 
-	def on_post_text_command(self, view, command_name, args):
+    settings = sublime.load_settings("FileRack.sublime-settings")
+    explicitSave = settings.get("explicit_save_to_file_rack")
 
-		if command_name == "set_file_type":
-			Helper.saveSyntax(view)
+    return not explicitSave
+
+
+  def on_post_text_command(self, view, command_name, args):
+
+    if command_name == "set_file_type":
+      Helper.saveSyntax(view)
 
 
 
 class SaveToFileRack(sublime_plugin.TextCommand):
 
-	def run(self, edit):
+  def run(self, edit):
 
-		fileInfo = Helper.getOrConstructFileInfoForView(self.view)
-		fileInfo.save()
-		sublime.status_message("The active view is in FileRack, now.")
+    fileInfo = Helper.getOrConstructFileInfoForView(self.view)
+    fileInfo.save()
+    sublime.status_message("The active view is in FileRack, now.")
 
 
 
 class DisplayFileRack(sublime_plugin.TextCommand):
 
-	def run(self, edit):
+  def run(self, edit):
 
-		self.items = self.getFiles()
-		self.transientView = None
-		sublime.active_window().show_quick_panel(
-			self.items,
-			self.openFile,
-			0,
-			0,
-			self.openFileTransient
-		)
-
-
-	def getFiles(self):
-
-		return [file for file in os.listdir(Helper.getRackPath()) if file.endswith(".txt")]
+    self.items = self.getFiles()
+    self.transientView = None
+    sublime.active_window().show_quick_panel(
+      self.items,
+      self.openFile,
+      0,
+      0,
+      self.openFileTransient
+    )
 
 
-	def getFilePathByIndex(self, index):
+  def getFiles(self):
 
-		fileName = self.items[index]
-		return os.path.join(Helper.getRackPath(), fileName)
-
-
-	def getFileNameByIndex(self, index):
-
-		return self.items[index]
+    return [file for file in os.listdir(Helper.getRackPath()) if file.endswith(".txt")]
 
 
-	def openFile(self, index):
+  def getFilePathByIndex(self, index):
 
-		if self.transientView:
-			self.transientView.close()
-
-		if index == -1:
-			# quick panel was cancelled
-			return
+    fileName = self.items[index]
+    return os.path.join(Helper.getRackPath(), fileName)
 
 
-		fileName = self.getFileNameByIndex(index)
+  def getFileNameByIndex(self, index):
 
-		(window, existingView) = self.getViewFor(fileName)
-		activeWindow = sublime.active_window()
-
-		if existingView:
-			if activeWindow == existingView.window():
-				window.focus_view(existingView)
-				return
-			else:
-				# since we cannot focus another sublime window, close
-				# the file and reopen it in the active window.
-				# a better approach would be to move the view to the active window, but
-				# unfortunately this isn't possible with the ST API.
-
-				existingView.window().focus_view(existingView)
-				existingView.window().run_command("close_file")
+    return self.items[index]
 
 
-		rackedView = activeWindow.new_file()
+  def openFile(self, index):
 
-		arguments = dict(filePath = self.getFilePathByIndex(index), fileName = fileName)
-		rackedView.run_command("load_racked_file", arguments)
+    if self.transientView:
+      self.transientView.close()
 
-
-	def getViewFor(self, fileName):
-
-		for window in sublime.windows():
-			for view in window.views():
-				fileInfo = Helper.getOrConstructFileInfoForView(view)
-
-				if fileInfo.currentName == fileName:
-					return (window, view)
-
-		return (None, None)
+    if index == -1:
+      # quick panel was cancelled
+      return
 
 
-	def openFileTransient(self, index):
+    fileName = self.getFileNameByIndex(index)
 
-		self.transientView = sublime.active_window().open_file(self.getFilePathByIndex(index), sublime.TRANSIENT)
-		Helper.setSyntax(self.transientView, self.getFileNameByIndex(index))
+    (window, existingView) = self.getViewFor(fileName)
+    activeWindow = sublime.active_window()
+
+    if existingView:
+      if activeWindow == existingView.window():
+        window.focus_view(existingView)
+        return
+      else:
+        # since we cannot focus another sublime window, close
+        # the file and reopen it in the active window.
+        # a better approach would be to move the view to the active window, but
+        # unfortunately this isn't possible with the ST API.
+
+        existingView.window().focus_view(existingView)
+        existingView.window().run_command("close_file")
+
+
+    rackedView = activeWindow.new_file()
+
+    arguments = dict(filePath = self.getFilePathByIndex(index), fileName = fileName)
+    rackedView.run_command("load_racked_file", arguments)
+
+
+  def getViewFor(self, fileName):
+
+    for window in sublime.windows():
+      for view in window.views():
+        fileInfo = Helper.getOrConstructFileInfoForView(view)
+
+        if fileInfo.currentName == fileName:
+          return (window, view)
+
+    return (None, None)
+
+
+  def openFileTransient(self, index):
+
+    self.transientView = sublime.active_window().open_file(self.getFilePathByIndex(index), sublime.TRANSIENT)
+    Helper.setSyntax(self.transientView, self.getFileNameByIndex(index))
 
 
 
 class LoadRackedFile(sublime_plugin.TextCommand):
 
-	def run(self, edit, fileName, filePath):
+  def run(self, edit, fileName, filePath):
 
-		with open(filePath, 'r') as f:
-			fileContent = f.read()
+    with open(filePath, 'r') as f:
+      fileContent = f.read()
 
-		fileInfo = Helper.getOrConstructFileInfoForView(self.view)
-		fileInfo.convertToRackedView(fileName)
+    fileInfo = Helper.getOrConstructFileInfoForView(self.view)
+    fileInfo.convertToRackedView(fileName)
 
-		self.view.insert(edit, 0, fileContent)
-		self.view.set_name(fileName)
+    self.view.insert(edit, 0, fileContent)
+    self.view.set_name(fileName)
 
-		Helper.setSyntax(self.view, fileName)
+    Helper.setSyntax(self.view, fileName)
 
 
 
 class Helper:
 
-	viewToFileInfoMapping = {}
-	isTestEnvironment = False
+  viewToFileInfoMapping = {}
+  isTestEnvironment = False
 
-	def __init__(self):
+  def __init__(self):
 
-		pass
-
-
-	@staticmethod
-	def getRackPath():
-
-		if Helper.isTestEnvironment:
-			return os.path.join(sublime.packages_path(), "FileRack", "tmp_test_files")
-		else:
-			settings = sublime.load_settings("FileRack.sublime-settings")
-
-			path = settings.get("rack_path")
-
-			if path and not os.path.exists(path):
-				message = "The rack_path you supplied in FileRack.sublime-settings doesn't exist. I will use the standard path."
-				# TODO
-				# message_dialog is probably very annoying; print on the other hand is unlikely to be seen
-				# sublime.message_dialog(message)
-				print(message)
-				path = None
-
-			if not path:
-				# TODO: does this path work when FileRack is bundled by package_control
-				path = os.path.join(sublime.packages_path(), "FileRack", "files")
-
-			return path
+    pass
 
 
-	@staticmethod
-	def getMetaDataPath():
+  @staticmethod
+  def getRackPath():
 
-		return os.path.join(Helper.getRackPath(), 'index.json')
+    if Helper.isTestEnvironment:
+      return os.path.join(sublime.packages_path(), "FileRack", "tmp_test_files")
+    else:
+      settings = sublime.load_settings("FileRack.sublime-settings")
 
+      path = settings.get("rack_path")
 
-	@staticmethod
-	def getFileType():
+      if path and not os.path.exists(path):
+        message = "The rack_path you supplied in FileRack.sublime-settings doesn't exist. I will use the standard path."
+        # TODO
+        # message_dialog is probably very annoying; print on the other hand is unlikely to be seen
+        # sublime.message_dialog(message)
+        print(message)
+        path = None
 
-		return ".txt"
+      if not path:
+        # TODO: does this path work when FileRack is bundled by package_control
+        path = os.path.join(sublime.packages_path(), "FileRack", "files")
 
-
-	@staticmethod
-	def getOrConstructFileInfoForView(view):
-
-		mapping = Helper.viewToFileInfoMapping
-		viewID = view.id()
-
-		if not viewID in mapping.keys():
-			mapping[viewID] = FileInfo(view)
-
-		fileInfo = mapping[viewID]
-		return fileInfo
-
-
-	@staticmethod
-	def getMetaData():
-
-		if not os.path.exists(Helper.getMetaDataPath()):
-			return {}
-
-		# TODO: why is the json invalid sometimes?
-		try:
-			with open(Helper.getMetaDataPath(), 'r') as file:
-				metadata = json.load(file)
-		except:
-			print("metadata could not be read properly.")
-			metadata = {}
-
-		return metadata
+      return path
 
 
-	@staticmethod
-	def saveSyntax(view):
+  @staticmethod
+  def getMetaDataPath():
 
-		metadata = Helper.getMetaData()
-
-		fileInfo = Helper.getOrConstructFileInfoForView(view)
-		metadata[fileInfo.currentName] = fileInfo.view.settings().get('syntax')
-
-		with open(Helper.getMetaDataPath(), 'w') as file:
-			json.dump(metadata, file, sort_keys = True, indent = 4, ensure_ascii = False)
+    return os.path.join(Helper.getRackPath(), 'index.json')
 
 
-	@staticmethod
-	def getSyntax(fileName):
+  @staticmethod
+  def getFileType():
 
-		metadata = Helper.getMetaData()
-
-		if fileName in metadata:
-			return metadata[fileName]
-		else:
-			return None
+    return ".txt"
 
 
-	@staticmethod
-	def setSyntax(view, fileName):
+  @staticmethod
+  def getOrConstructFileInfoForView(view):
 
-		syntax = Helper.getSyntax(fileName)
-		if syntax:
-			view.set_syntax_file(syntax)
+    mapping = Helper.viewToFileInfoMapping
+    viewID = view.id()
+
+    if not viewID in mapping.keys():
+      mapping[viewID] = FileInfo(view)
+
+    fileInfo = mapping[viewID]
+    return fileInfo
 
 
-	@staticmethod
-	def sanitizeFileName(filename):
+  @staticmethod
+  def getMetaData():
 
-		validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-		cleanedFilename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore')
-		return ''.join(chr(c) for c in cleanedFilename if chr(c) in validFilenameChars)
+    if not os.path.exists(Helper.getMetaDataPath()):
+      return {}
+
+    # TODO: why is the json invalid sometimes?
+    try:
+      with open(Helper.getMetaDataPath(), 'r') as file:
+        metadata = json.load(file)
+    except:
+      print("metadata could not be read properly.")
+      metadata = {}
+
+    return metadata
+
+
+  @staticmethod
+  def saveSyntax(view):
+
+    metadata = Helper.getMetaData()
+
+    fileInfo = Helper.getOrConstructFileInfoForView(view)
+    metadata[fileInfo.currentName] = fileInfo.view.settings().get('syntax')
+
+    with open(Helper.getMetaDataPath(), 'w') as file:
+      json.dump(metadata, file, sort_keys = True, indent = 4, ensure_ascii = False)
+
+
+  @staticmethod
+  def getSyntax(fileName):
+
+    metadata = Helper.getMetaData()
+
+    if fileName in metadata:
+      return metadata[fileName]
+    else:
+      return None
+
+
+  @staticmethod
+  def setSyntax(view, fileName):
+
+    syntax = Helper.getSyntax(fileName)
+    if syntax:
+      view.set_syntax_file(syntax)
+
+
+  @staticmethod
+  def sanitizeFileName(filename):
+
+    validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+    cleanedFilename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore')
+    return ''.join(chr(c) for c in cleanedFilename if chr(c) in validFilenameChars)
 
 
 
 class TestFileRack(sublime_plugin.TextCommand):
 
-		def run(self, edit, commandName, argTuple):
+    def run(self, edit, commandName, argTuple):
 
-			getattr(self, commandName)(self.view, edit, argTuple)
-
-
-		def insertSomeText(self, view, edit, argTuple):
-
-			self.view.insert(edit, 0, argTuple[0])
-			self.onModify(view, edit, ())
+      getattr(self, commandName)(self.view, edit, argTuple)
 
 
-		def deleteText(self, view, edit, argTuple):
+    def insertSomeText(self, view, edit, argTuple):
 
-			self.view.run_command('select_all')
-			self.view.run_command('left_delete')
-
-
-		def onModify(self, view, edit, argTuple):
-
-			fileInfo = Helper.getOrConstructFileInfoForView(view)
-			fileInfo.onModify(True)
+      self.view.insert(edit, 0, argTuple[0])
+      self.onModify(view, edit, ())
 
 
-		def enableTestEnvironment(self, view, edit, argTuple):
+    def deleteText(self, view, edit, argTuple):
 
-			Helper.isTestEnvironment = True
+      self.view.run_command('select_all')
+      self.view.run_command('left_delete')
 
 
-		def disableTestEnvironment(self, view, edit, argTuple):
+    def onModify(self, view, edit, argTuple):
 
-			Helper.isTestEnvironment = False
+      fileInfo = Helper.getOrConstructFileInfoForView(view)
+      fileInfo.onModify(True)
+
+
+    def enableTestEnvironment(self, view, edit, argTuple):
+
+      Helper.isTestEnvironment = True
+
+
+    def disableTestEnvironment(self, view, edit, argTuple):
+
+      Helper.isTestEnvironment = False
 
