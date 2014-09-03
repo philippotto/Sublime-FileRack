@@ -4,7 +4,7 @@ import os, shutil
 
 version = sublime.version()
 
-class TestHelloWorld(TestCase):
+class TestFileRack(TestCase):
 
 	def setUp(self):
 
